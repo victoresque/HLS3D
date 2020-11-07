@@ -38,40 +38,31 @@ class CameraBase:
         self.world_to_camera = np.linalg.inv(camera_to_world)
 
     def rotate_x(self, degree):
-        c = np.cos(-degree * np.pi / 180)
-        s = np.sin(-degree * np.pi / 180)
-        camera_to_world = self.camera_to_world
-        camera_to_world = camera_to_world @ np.array([
+        c = np.cos(degree * np.pi / 180)
+        s = np.sin(degree * np.pi / 180)
+        self.world_to_camera = np.array([
             [1.0, 0.0, 0.0, 0.0],
             [0.0, c, -s, 0.0],
             [0.0, s, c, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ])
-        self.world_to_camera = np.linalg.inv(camera_to_world)
+            [0.0, 0.0, 0.0, 1.0]]) @ self.world_to_camera
 
     def rotate_y(self, degree):
-        c = np.cos(degree * np.pi / 180)
-        s = np.sin(degree * np.pi / 180)
-        camera_to_world = self.camera_to_world
-        camera_to_world = camera_to_world @ np.array([
+        c = np.cos(-degree * np.pi / 180)
+        s = np.sin(-degree * np.pi / 180)
+        self.world_to_camera = np.array([
             [c, 0.0, s, 0.0],
             [0.0, 1.0, 0.0, 0.0],
             [-s, 0.0, c, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ])
-        self.world_to_camera = np.linalg.inv(camera_to_world)
+            [0.0, 0.0, 0.0, 1.0]]) @ self.world_to_camera
 
     def rotate_z(self, degree):
-        c = np.cos(degree * np.pi / 180)
-        s = np.sin(degree * np.pi / 180)
-        camera_to_world = self.camera_to_world
-        camera_to_world = camera_to_world @ np.array([
+        c = np.cos(-degree * np.pi / 180)
+        s = np.sin(-degree * np.pi / 180)
+        self.world_to_camera = np.array([
             [c, -s, 0.0, 0.0],
             [s, c, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ])
-        self.world_to_camera = np.linalg.inv(camera_to_world)
+            [0.0, 0.0, 0.0, 1.0]]) @ self.world_to_camera
 
 
 class Camera(CameraBase):

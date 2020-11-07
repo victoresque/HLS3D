@@ -17,12 +17,12 @@ class Light(CameraBase):
         self.translate_z(2000)
         self.translate_y(2000)
         self.translate_x(2000)
-        self.rotate_y(20)
-        self.rotate_x(20)
+        self.rotate_y(90)
+        self.rotate_x(45)
 
-        self.ambient = 0.1
+        self.ambient = 0.5
 
-        self.shadow_map_dim = 256
+        self.shadow_map_dim = 512
         self.shadow_map_depth = 10000
         self.shadow_map_param = [0, 1, 0, 1]
 

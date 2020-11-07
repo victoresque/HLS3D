@@ -5,8 +5,9 @@ from transformable import Transformable
 
 
 class GameObject(Transformable):
-    def __init__(self):
+    def __init__(self, name):
         super().__init__(np.eye(4))
+        self.name = name
         self.mesh = None
         self.rigid_body = None
 

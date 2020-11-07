@@ -5,6 +5,9 @@ class Transformable:
     def __init__(self, transform):
         self.transform = transform
 
+    def scale(self, scale):
+        self.transform[3, 3] = 1 / scale
+
     def translate_local_z(self, offset):
         pass
 
