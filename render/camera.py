@@ -93,8 +93,7 @@ class Camera(CameraBase):
         scale = np.array([self.near_clip/self.plane_width*self.image_width/-point[2],
                           self.near_clip/self.plane_height*self.image_height/point[2], -1.0])
         offset = np.array([0.5*self.image_width, 0.5*self.image_height, 0.0])
-        proj = point * scale + offset
-        return proj
+        return point.squeeze()[:3] * scale + offset
 
 
 if __name__ == '__main__':

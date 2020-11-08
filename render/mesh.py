@@ -38,7 +38,7 @@ class Mesh:
 
             self.mesh[name] = {
                 'format': material.vertex_format,
-                'vertices': material.vertices,
+                'vertices': np.array(material.vertices),
                 'texture_name': texture_name
             }
 

@@ -9,22 +9,14 @@ class Light(CameraBase):
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 1.0, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0]
-        ])
-
+            [0.0, 0.0, 0.0, 1.0]])
         super().__init__(world_to_light)
 
-        self.translate_z(2000)
-        self.translate_y(2000)
-        self.translate_x(2000)
-        self.rotate_y(90)
-        self.rotate_x(45)
-
         self.ambient = 0.5
-
-        self.shadow_map_dim = 512
+        self.shadow_map_dim = 64
         self.shadow_map_depth = 10000
         self.shadow_map_param = [0, 1, 0, 1]
+        self.shadow_map_bias = 1
 
     @property
     def world_to_light(self):
@@ -38,4 +30,4 @@ class Light(CameraBase):
         xoffset, xscale, yoffset, yscale = self.shadow_map_param
         offset = np.array([xoffset, yoffset, 0.0])
         scale = np.array([xscale, yscale, 1.0])
-        return (point - offset) * scale
+        return (point.squeeze()[:3] - offset) * scale

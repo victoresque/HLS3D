@@ -4,9 +4,10 @@ import numpy as np
 class Transformable:
     def __init__(self, transform):
         self.transform = transform
+        self.scale = 1
 
-    def scale(self, scale):
-        self.transform[3, 3] = 1 / scale
+    def set_scale(self, scale):
+        self.scale = scale
 
     def translate_local_z(self, offset):
         pass
