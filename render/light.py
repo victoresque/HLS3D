@@ -14,7 +14,6 @@ class Light(CameraBase):
 
         self.ambient = 0.5
         self.shadow_map_dim = 64
-        self.shadow_map_depth = 10000
         self.shadow_map_param = [0, 1, 0, 1]
         self.shadow_map_bias = 1
 
@@ -25,6 +24,11 @@ class Light(CameraBase):
     @property
     def light_to_world(self):
         return np.linalg.inv(self.world_to_light)
+
+    @property
+    def norm(self):
+        n = (self.light_to_world[:3, :3] @ np.array([[0, 0, 1]]).T).squeeze()
+        return n / np.linalg.norm(n)
 
     def project(self, point):
         xoffset, xscale, yoffset, yscale = self.shadow_map_param

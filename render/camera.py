@@ -37,6 +37,7 @@ class CameraBase:
         camera_to_world[2, 3] += offset
         self.world_to_camera = np.linalg.inv(camera_to_world)
 
+    # FIXME: incorrect rotation
     def rotate_x(self, degree):
         c = np.cos(degree * np.pi / 180)
         s = np.sin(degree * np.pi / 180)
@@ -90,10 +91,11 @@ class Camera(CameraBase):
             self.plane_width *= self.image_ratio / self.film_ratio
 
     def project(self, point):
+        point = point.squeeze()
         scale = np.array([self.near_clip/self.plane_width*self.image_width/-point[2],
                           self.near_clip/self.plane_height*self.image_height/point[2], -1.0])
         offset = np.array([0.5*self.image_width, 0.5*self.image_height, 0.0])
-        return point.squeeze()[:3] * scale + offset
+        return point[:3] * scale + offset
 
 
 if __name__ == '__main__':

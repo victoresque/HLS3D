@@ -17,6 +17,15 @@ def triangle_area(v0, v1, v2):
     return (v1[0]-v0[0])*(v2[1]-v0[1]) - (v1[1]-v0[1])*(v2[0]-v0[0])
 
 
+def convert_map_for_vis(m, ignore=np.inf):
+    m = np.array(m)
+    m[m == ignore] = 1
+    m_min = np.min(m[m != 1])
+    m_max = np.max(m[m != 1])
+    m[m != 1] = (m[m != 1] - m_min) / (m_max - m_min) * 0.8
+    return m
+
+
 def geometric_transform(scene):
     world_to_camera = scene.camera.world_to_camera
     world_to_light = scene.light.world_to_light
@@ -93,15 +102,16 @@ def geometric_transform(scene):
                 symin = min(symin, lv0[1], lv1[1], lv2[1])
                 symax = max(symax, lv0[1], lv1[1], lv2[1])
 
+                if triangle_area(lv0, lv1, lv2) > 0:
+                    mesh['light_vertices'].extend([*lv0, *lv1, *lv2])
+
                 # frustum clipping
-                if max(-cv0[2], -cv1[2], -cv2[2]) > far_clip or min(-cv0[2], -cv1[2], -cv2[2]) < near_clip:
+                # TODO: frustum LRUD clipping?
+                if min(-cv0[2], -cv1[2], -cv2[2]) > far_clip or max(-cv0[2], -cv1[2], -cv2[2]) < near_clip:
                     continue
 
                 if triangle_area(cv0, cv1, cv2) > 0:
                     mesh['cam_vertices'].extend([*t0, *cn0, *cv0, *t1, *cn1, *cv1, *t2, *cn2, *cv2])
-
-                if triangle_area(lv0, lv1, lv2) > 0:
-                    mesh['light_vertices'].extend([*lv0, *lv1, *lv2])
 
             mesh['cam_vertices'] = np.array(mesh['cam_vertices'])
             mesh['light_vertices'] = np.array(mesh['light_vertices'])
@@ -131,10 +141,10 @@ def shadow_mapping(scene, shadow_map):
                 if area <= 0:
                     continue
 
-                symax = int(max(sv0[1], sv1[1], sv2[1]))
-                symin = int(min(sv0[1], sv1[1], sv2[1]))
-                sxmax = int(max(sv0[0], sv1[0], sv2[0]))
-                sxmin = int(min(sv0[0], sv1[0], sv2[0]))
+                symax = min(shadow_map_dim, int(max(sv0[1], sv1[1], sv2[1])))
+                symin = max(0, int(min(sv0[1], sv1[1], sv2[1])))
+                sxmax = min(shadow_map_dim, int(max(sv0[0], sv1[0], sv2[0])))
+                sxmin = max(0, int(min(sv0[0], sv1[0], sv2[0])))
 
                 for sy in range(symin, symax+1):
                     for sx in range(sxmin, sxmax+1):
@@ -152,8 +162,7 @@ def rasterization(scene, depth_buffer, raster_buffer, shadow_map):
     light = scene.light
     height, width = depth_buffer.shape
 
-    lnorm = (camera.world_to_camera[:3, :3] @ light.light_to_world[:3, :3] @ np.array([[0, 0, 1]]).T).squeeze()
-    lnorm = lnorm / np.linalg.norm(lnorm)
+    lnorm = camera.world_to_camera[:3, :3] @ light.norm
     lambt = light.ambient
 
     for obj in scene.objects:
@@ -207,7 +216,7 @@ def rasterization(scene, depth_buffer, raster_buffer, shadow_map):
                                 depth_buffer[fy, fx] = fz
 
 
-def shadow_raster(scene, shadow_buffer, shadow_map):
+def shadow_raster(scene, shadow_buffer, depth_buffer, shadow_map):
     camera = scene.camera
     height, width = shadow_buffer.shape
 
@@ -215,8 +224,8 @@ def shadow_raster(scene, shadow_buffer, shadow_map):
     shadow_map_dim = shadow_map.shape[0]
 
     light = scene.light
+    lnorm = camera.world_to_camera[:3, :3] @ light.norm
     camera_to_light = light.world_to_light @ camera.camera_to_world
-    shadow_map_depth = light.shadow_map_depth
     shadow_map_bias = light.shadow_map_bias
 
     for obj in scene.objects:
@@ -229,6 +238,8 @@ def shadow_raster(scene, shadow_buffer, shadow_map):
                 cv1 = np.array([[*vertices[i+1*step+vi0:i+1*step+vi1], 1]]).T
                 cv2 = np.array([[*vertices[i+2*step+vi0:i+2*step+vi1], 1]]).T
 
+                cnorm = vertices[i+0*step+ni0:i+0*step+ni1]
+
                 # y inverted
                 fv0 = camera.project(cv0)
                 fv1 = camera.project(cv1)
@@ -237,6 +248,10 @@ def shadow_raster(scene, shadow_buffer, shadow_map):
                 area = -triangle_area(fv0, fv1, fv2)
                 if area <= 0:
                     continue
+
+                fz0_1 = 1 / fv0[2]
+                fz1_1 = 1 / fv1[2]
+                fz2_1 = 1 / fv2[2]
 
                 fymax = int(np.round(min(height-1, max(fv0[1], fv1[1], fv2[1]))))
                 fymin = int(np.round(max(0, min(fv0[1], fv1[1], fv2[1]))))
@@ -247,6 +262,9 @@ def shadow_raster(scene, shadow_buffer, shadow_map):
                 sv1 = light.project((camera_to_light @ cv1).squeeze()[:3])
                 sv2 = light.project((camera_to_light @ cv2).squeeze()[:3])
 
+                bias = shadow_map_bias * np.tan(np.arccos(np.dot(cnorm, lnorm)))
+                np.clip(bias, 0, shadow_map_bias)
+
                 for fy in range(fymin, fymax+1):
                     for fx in range(fxmin, fxmax+1):
                         w0 = triangle_area((fx, fy), fv2, fv1) / area
@@ -254,15 +272,19 @@ def shadow_raster(scene, shadow_buffer, shadow_map):
                         w2 = triangle_area((fx, fy), fv1, fv0) / area
 
                         if (w0 >= 0) and (w1 >= 0) and (w2 >= 0):
-                            sv = w0*sv0 + w1*sv1 + w2*sv2
+                            fz_1 = w0*fz0_1 + w1*fz1_1 + w2*fz2_1
+                            fz = 1 / fz_1
 
-                            sx = int(np.round(sv[0]))
-                            sy = int(np.round(sv[1]))
-                            sz = -sv[2]
+                            if fz < depth_buffer[fy, fx] + 0.1:  # TODO: configurable threshold
+                                sv = (w0*sv0*fz0_1 + w1*sv1*fz1_1 + w2*sv2*fz2_1) * fz
 
-                            if (0 <= sx < shadow_map_dim) and (0 <= sy < shadow_map_dim) \
-                                    and (sz < shadow_map[sy, sx]+shadow_map_bias < shadow_map_depth):
-                                shadow_buffer[fy, fx] = 1
+                                sx = int(np.round(sv[0]))
+                                sy = int(np.round(sv[1]))
+                                sz = -sv[2]
+
+                                if (0 <= sx < shadow_map_dim) and (0 <= sy < shadow_map_dim) \
+                                        and (sz < shadow_map[sy, sx] + bias < np.inf):
+                                    shadow_buffer[fy, fx] = 1
 
 
 def texture_mapping(scene):
@@ -272,13 +294,12 @@ def texture_mapping(scene):
 def render(scene):
     image_width = scene.camera.image_width
     image_height = scene.camera.image_height
-
     shadow_map_dim = scene.light.shadow_map_dim
-    shadow_map_depth = scene.light.shadow_map_depth
-    shadow_map = np.ones((shadow_map_dim, shadow_map_dim)) * shadow_map_depth
+
+    shadow_map = np.ones((shadow_map_dim, shadow_map_dim)) * np.inf
     depth_buffer = np.ones((image_height, image_width)) * scene.camera.far_clip
     shadow_buffer = np.zeros((image_height, image_width))
-    raster_buffer = np.zeros((image_height, image_width, 4))  # texture ID, texture Y, texture X, luminance
+    raster_buffer = np.zeros((image_height, image_width, 4))  # TODO: texture ID, texture Y, texture X, luminance
     frame_buffer = np.zeros((image_height, image_width, 1))
 
     # geometric (mesh transform, clipping, backface culling)
@@ -290,24 +311,25 @@ def render(scene):
     t0 = time()
     shadow_mapping(scene, shadow_map)
     print('{:25s}:'.format('shadow_mapping()'), time() - t0)
-    cv2.imshow('', shadow_map / (shadow_map.max() - shadow_map.min() + 1e-9))
+    shadow_map_vis = convert_map_for_vis(shadow_map, ignore=np.inf)
+    cv2.imshow('shadow map', cv2.resize(shadow_map_vis[::-1, :], (512, 512)))
     cv2.waitKey()
 
     # rasterization (z buffer)
     t0 = time()
     rasterization(scene, depth_buffer, frame_buffer, shadow_map)
     print('{:25s}:'.format('rasterization()'), time() - t0)
-    cv2.imshow('', frame_buffer)
+    cv2.imshow('rasterization', frame_buffer)
     cv2.waitKey()
 
     # shadow rasterization
     t0 = time()
-    shadow_raster(scene, shadow_buffer, shadow_map)
+    shadow_raster(scene, shadow_buffer, depth_buffer, shadow_map)
     print('{:25s}:'.format('shadow_raster()'), time() - t0)
-    cv2.imshow('', shadow_buffer)
+    cv2.imshow('shadow rasterization', shadow_buffer)
     cv2.waitKey()
 
-    cv2.imshow('', frame_buffer * (shadow_buffer[:, :, np.newaxis]*0.5+0.5))  # TODO: ambient
+    cv2.imshow('blend', frame_buffer * (shadow_buffer[:, :, np.newaxis]*0.5+0.5))  # TODO: ambient
     cv2.waitKey()
 
     # texture mapping
@@ -324,34 +346,33 @@ if __name__ == '__main__':
     obj = GameObject('0')
     obj.load_mesh('../data/deer.obj')
     obj.set_scale(1/30)
-    obj.rotate_y(15)
+    obj.translate_x(10)
+    obj.rotate_y(-35)
     scene.objects += [obj]
 
     obj = GameObject('1')
     obj.load_mesh('../data/cube.obj')
-    obj.translate_x(25)
-    obj.translate_y(35)
-    obj.translate_z(-3)
-    obj.set_scale(4)
+    obj.set_scale(100)
+    obj.translate_x(-50)
+    obj.translate_y(-100)
+    obj.translate_z(-50)
     scene.objects += [obj]
 
     scene.light = Light()
     scene.light.shadow_map_dim = 128
     scene.light.shadow_map_bias = 1
-    scene.light.translate_z(0)
+    scene.light.translate_z(1000)
     scene.light.translate_y(1500)
     scene.light.translate_x(2000)
-    scene.light.rotate_y(90)
+    scene.light.rotate_y(100)
     scene.light.rotate_x(35)
 
-    image_width = 640
-    image_height = 480
+    image_width = 320
+    image_height = 240
 
     scene.camera = Camera(0.98, 0.735, image_width, image_height, 1, 10000, 20, np.eye(4))
-    scene.camera.translate_x(50)
-    scene.camera.translate_y(40)
-    scene.camera.translate_z(50)
-    scene.camera.rotate_y(35)
-    scene.camera.rotate_x(10)
+    scene.camera.translate_y(60)
+    scene.camera.translate_z(60)
+    scene.camera.rotate_x(35)
 
     render(scene)
