@@ -1,5 +1,8 @@
 #include "render.h"
 
+#include <iostream>
+using namespace std;
+
 void apuint64_1_to_half_2(const ap_uint<64>& a, half& b, half& c) {
     #pragma HLS inline
     union_uint32_float_t u1, u2;

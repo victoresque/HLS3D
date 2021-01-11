@@ -1,5 +1,8 @@
 #include "render.h"
 
+#include <iostream>
+using namespace std;
+
 void rasterization (
     stream_t* stream_input,
     stream_t* stream_output,
@@ -26,18 +29,19 @@ void rasterization (
 
     value_t stream_data;
     stream_data.data = 0;
-	stream_data.keep = 0xFF;
-	stream_data.strb = 0xFF;
-	stream_data.user = 0;
-	stream_data.last = 0;
-	stream_data.id = 0;
-	stream_data.dest = 0;
-
-    #define BUF_H 60
+    stream_data.keep = 0xFF;
+    stream_data.strb = 0xFF;
+    stream_data.user = 0;
+    stream_data.last = 0;
+    stream_data.id = 0;
+    stream_data.dest = 0;
 
     static half depth_buffer[BUF_H][640];
     static uint8_t frame_buffer[BUF_H][640][3];
     static uint8_t texture[4][64][64][3];
+
+    #pragma HLS ARRAY_PARTITION variable=frame_buffer cyclic factor=3 dim=3
+    #pragma HLS ARRAY_PARTITION variable=texture cyclic factor=3 dim=4
 
     half cv0[3], cv1[3], cv2[3];
     half cn0[3], cn1[3], cn2[3];
@@ -53,9 +57,11 @@ void rasterization (
     half lnormh[3];
     half lambt = 0.5;
 
-    half area, w0, w1, w2;
-
+    float area;
+    half w0, w1, w2;
     half fvp[3];
+
+    half clip = 1.0;
 
     int ct[2];
     uint8_t tex[3];
@@ -69,17 +75,30 @@ void rasterization (
 
     if (mode == 0) {
         for (int i = 0; i < BUF_H; i++) {
-            for (int j=0; j < 640; j++) {
+            for (int j = 0; j < 640; j++) {
+                #pragma HLS pipeline
                 depth_buffer[i][j] = 10000.0;
                 frame_buffer[i][j][0] = 0;
                 frame_buffer[i][j][1] = 0;
                 frame_buffer[i][j][2] = 0;
             }
         }
+
+        for (int n = 0; n < 4; n++) {
+            for (int i = 0; i < 64; i++) {
+                for (int j = 0; j < 64; j++) {
+                    #pragma HLS pipeline
+                    texture[n][i][j][0] = 255;
+                    texture[n][i][j][1] = 255;
+                    texture[n][i][j][2] = 255;
+                }
+            }
+        }
     }
     else if (mode == 1) {
         for (int i = 0; i < 64; i++) {
             for (int j = 0; j < 64; j+=2) {
+                #pragma HLS pipeline
                 apuint64_1_to_uint8_8(stream_input->read().data,
                                       u0, u1, u2, u3, u4, u5, u6, u7);
                 texture[texture_id][i][j+0][0] = u0;
@@ -93,29 +112,30 @@ void rasterization (
     }
     else if (mode == 2) {
         for (int i = 0; i < num_faces; i++) {
-            #pragma HLS pipeline
-            apuint64_1_to_half_2(stream_input->read().data, cv0[0], cv0[1]);
-            apuint64_1_to_half_2(stream_input->read().data, cv0[2], cn0[0]);
-            apuint64_1_to_half_2(stream_input->read().data, cn0[1], cn0[2]);
             apuint64_1_to_half_2(stream_input->read().data, ct0[0], ct0[1]);
+            apuint64_1_to_half_2(stream_input->read().data, cn0[0], cn0[1]);
+            apuint64_1_to_half_2(stream_input->read().data, cn0[2], cv0[0]);
+            apuint64_1_to_half_2(stream_input->read().data, cv0[1], cv0[2]);
 
-            apuint64_1_to_half_2(stream_input->read().data, cv1[0], cv1[1]);
-            apuint64_1_to_half_2(stream_input->read().data, cv1[2], cn1[0]);
-            apuint64_1_to_half_2(stream_input->read().data, cn1[1], cn1[2]);
             apuint64_1_to_half_2(stream_input->read().data, ct1[0], ct1[1]);
+            apuint64_1_to_half_2(stream_input->read().data, cn1[0], cn1[1]);
+            apuint64_1_to_half_2(stream_input->read().data, cn1[2], cv1[0]);
+            apuint64_1_to_half_2(stream_input->read().data, cv1[1], cv1[2]);
 
-            apuint64_1_to_half_2(stream_input->read().data, cv2[0], cv2[1]);
-            apuint64_1_to_half_2(stream_input->read().data, cv2[2], cn2[0]);
-            apuint64_1_to_half_2(stream_input->read().data, cn2[1], cn2[2]);
             apuint64_1_to_half_2(stream_input->read().data, ct2[0], ct2[1]);
+            apuint64_1_to_half_2(stream_input->read().data, cn2[0], cn2[1]);
+            apuint64_1_to_half_2(stream_input->read().data, cn2[2], cv2[0]);
+            apuint64_1_to_half_2(stream_input->read().data, cv2[1], cv2[2]);
 
-            l0 = lambt + vector_dot_vector(cn0, lnormh)*(1-lambt);
-            l1 = lambt + vector_dot_vector(cn1, lnormh)*(1-lambt);
-            l2 = lambt + vector_dot_vector(cn2, lnormh)*(1-lambt);
+            l0 = lambt + vector_dot_vector(cn0, lnormh)*(1.0-lambt);
+            l1 = lambt + vector_dot_vector(cn1, lnormh)*(1.0-lambt);
+            l2 = lambt + vector_dot_vector(cn2, lnormh)*(1.0-lambt);
 
             cam_project(cv0, cam_scale, cam_offset, fv0, fv0i);
             cam_project(cv1, cam_scale, cam_offset, fv1, fv1i);
             cam_project(cv2, cam_scale, cam_offset, fv2, fv2i);
+
+            if ((fv0[2]<clip) && (fv1[2]<clip) && (fv2[2]<clip)) continue;
 
             area = triangle_area(fv2, fv1, fv0);
             if (area <= 0) continue;
@@ -124,13 +144,12 @@ void rasterization (
             fz1_1 = 1 / fv1[2];
             fz2_1 = 1 / fv2[2];
 
-            fymax = (int) hmin(fh[1]-1, hmax(fv0i[1], hmax(fv1i[1], fv2i[1])));
-            fymin = (int) hmax(  fh[0], hmin(fv0i[1], hmin(fv1i[1], fv2i[1])));
-            fxmax = (int) hmin(  640-1, hmax(fv0i[0], hmax(fv1i[1], fv2i[1])));
-            fxmin = (int) hmax(      0, hmin(fv0i[0], hmin(fv1i[1], fv2i[1])));
+            fymax = imin(fh[1]-1, imax(fv0i[1], imax(fv1i[1], fv2i[1])));
+            fymin = imax(  fh[0], imin(fv0i[1], imin(fv1i[1], fv2i[1])));
+            fxmax = imin(  640-1, imax(fv0i[0], imax(fv1i[0], fv2i[0])));
+            fxmin = imax(      0, imin(fv0i[0], imin(fv1i[0], fv2i[0])));
 
             for (int fy = fymin; fy <= fymax; fy++) {
-                #pragma HLS pipeline
                 for (int fx = fxmin; fx <= fxmax; fx++) {
                     #pragma HLS pipeline
                     fvp[0] = fx;
@@ -145,20 +164,20 @@ void rasterization (
                         fz_1 = w0*fz0_1 + w1*fz1_1 + w2*fz2_1;
                         fz = 1 / fz_1;
 
-                        if (fz < depth_buffer[fy-fh[0]][fx]) {
+                        if ((fz>=clip) && (fz < depth_buffer[fy-fh[0]][fx])) {
                             depth_buffer[fy-fh[0]][fx] = fz;
 
-                            ct[0] = round((w0*ct0[0]*fz0_1 + w1*ct1[0]*fz1_1 + w2*ct2[0]*fz2_1) * fz);
-                            ct[1] = round((w0*ct0[1]*fz0_1 + w1*ct1[1]*fz1_1 + w2*ct2[1]*fz2_1) * fz);
+                            ct[0] = round(64 * (w0*ct0[0]*fz0_1 + w1*ct1[0]*fz1_1 + w2*ct2[0]*fz2_1) * fz);
+                            ct[1] = round(64 * (w0*ct0[1]*fz0_1 + w1*ct1[1]*fz1_1 + w2*ct2[1]*fz2_1) * fz);
 
-                            ct[0] = (ct[0] < 0) ? 0 : ((ct[0] > 63) ? 63 : ct[0]);
-                            ct[1] = (ct[1] < 0) ? 0 : ((ct[1] > 63) ? 63 : ct[1]);
+                            ct[0] = (ct[0]<0) ? 0 : ((ct[0]>63) ? 63 : ct[0]);
+                            ct[1] = (ct[1]<0) ? 0 : ((ct[1]>63) ? 63 : ct[1]);
 
                             lum = (w0*l0*fz0_1 + w1*l1*fz1_1 + w2*l2*fz2_1) * fz;
 
-                            tex[0] = texture[texture_id][ct[0]][ct[1]][0] * lum;
-                            tex[1] = texture[texture_id][ct[0]][ct[1]][1] * lum;
-                            tex[2] = texture[texture_id][ct[0]][ct[1]][2] * lum;
+                            tex[0] = ((half)texture[texture_id][ct[0]][ct[1]][0]) * lum;
+                            tex[1] = ((half)texture[texture_id][ct[0]][ct[1]][1]) * lum;
+                            tex[2] = ((half)texture[texture_id][ct[0]][ct[1]][2]) * lum;
 
                             frame_buffer[fy-fh[0]][fx][0] = tex[0];
                             frame_buffer[fy-fh[0]][fx][1] = tex[1];
@@ -172,6 +191,7 @@ void rasterization (
     else if (mode == 3) {
         for (int i = 0; i < BUF_H; i++) {
             for (int j = 0; j < 640; j+=2) {
+                #pragma HLS pipeline
                 uint8_8_to_apuint64_1(
                     frame_buffer[i][j+0][0], frame_buffer[i][j+0][1], frame_buffer[i][j+0][2], 0,
                     frame_buffer[i][j+1][0], frame_buffer[i][j+1][1], frame_buffer[i][j+1][2], 0,

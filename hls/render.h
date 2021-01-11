@@ -25,12 +25,14 @@ void uint8_8_to_apuint64_1 (const uint8_t& a, const uint8_t& b,
                             const uint8_t& g, const uint8_t& h,
                             ap_uint<64>& i);
 
-half triangle_area (half v0[3], half v1[3], half v2[3]);
+float triangle_area (half v0[3], half v1[3], half v2[3]);
 void matrix_mul_vector (bool mode, half m[3][4], half scale, half v[3], half result[3]);
 half vector_dot_vector (half u[3], half v[3]);
 void cam_project (half cv[3], float scale[3], float offset[3], half fv[3], int fvi[3]);
 half hmax (half a, half b);
 half hmin (half a, half b);
+int imax (int a, int b);
+int imin (int a, int b);
 
 void geometric_transform (
     stream_t* stream_input,
@@ -40,9 +42,23 @@ void geometric_transform (
     float scale
 );
 
+#define BUF_H 60
+void rasterization (
+    stream_t* stream_input,
+    stream_t* stream_output,
+    int mode,  // 0: reset, 1: texture, 2: mesh in, 3: frame out
+    int object_id,
+    int texture_id,
+    int num_faces,
+    float lnorm[3],
+    float cam_scale[3],
+    float cam_offset[3],
+    int fh[2]  // frame height range
+);
+
 typedef union {
-	uint32_t i;
-	float f;
+    uint32_t i;
+    float f;
 } union_uint32_float_t;
 
 #endif

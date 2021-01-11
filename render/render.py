@@ -114,12 +114,13 @@ def geometric_transform(scene):
                     mesh['light_vertices'].extend([*lv0, *lv1, *lv2])
 
                 # near/far frustum clipping
-                if min(-cv0[2], -cv1[2], -cv2[2]) > far_clip or max(-cv0[2], -cv1[2], -cv2[2]) < near_clip:
-                    continue
+                # if min(-cv0[2], -cv1[2], -cv2[2]) > far_clip or max(-cv0[2], -cv1[2], -cv2[2]) < near_clip:
+                #     continue
 
                 # camera coordinate backface culling
-                if triangle_area(cv0, cv1, cv2) > 0:
-                    mesh['cam_vertices'].extend([*t0, *cn0, *cv0, *t1, *cn1, *cv1, *t2, *cn2, *cv2])
+                # if triangle_area(cv0, cv1, cv2) > 0:
+                #     mesh['cam_vertices'].extend([*t0, *cn0, *cv0, *t1, *cn1, *cv1, *t2, *cn2, *cv2])
+                mesh['cam_vertices'].extend([*t0, *cn0, *cv0, *t1, *cn1, *cv1, *t2, *cn2, *cv2])
 
             mesh['cam_vertices'] = np.array(mesh['cam_vertices'])
             mesh['light_vertices'] = np.array(mesh['light_vertices'])
@@ -179,6 +180,8 @@ def rasterization(scene, depth_buffer, raster_buffer):
 
     # normalized light direction vector
     lnorm = camera.world_to_camera[:3, :3] @ light.norm
+
+    print('transformed lnorm:', lnorm)
 
     # ambient light (range: 0.0~1.0)
     lambt = light.ambient
@@ -364,7 +367,21 @@ def render(scene):
     print('{:25s}:'.format('shadow_mapping()'), time() - t0)
     shadow_map_vis = convert_map_for_vis(shadow_map, ignore=np.inf)
     cv2.imshow('shadow map', cv2.resize(shadow_map_vis[::-1, :], (512, 512)))
-    cv2.waitKey()
+
+    print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+    hls_rasterization_testdata = []
+    for obj in scene.objects:
+        for name, mesh in obj.mesh.mesh.items():
+            hls_rasterization_testdata.extend(mesh['cam_vertices'])
+    print("num_faces: ", int(len(hls_rasterization_testdata)/24))
+    print("lnorm:     ", scene.light.norm)
+    print("cam_scale: ", scene.camera.scale)
+    print("cam_offset:", scene.camera.offset)
+
+    with open('scene.txt', "w") as f:
+        for x in hls_rasterization_testdata:
+            f.write("{:.6f}\n".format(x))
+    print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
 
     # rasterization (z buffer)
     t0 = time()
@@ -376,7 +393,6 @@ def render(scene):
     shadow_raster(scene, shadow_buffer, depth_buffer, shadow_map)
     print('{:25s}:'.format('shadow_raster()'), time() - t0)
     cv2.imshow('shadow rasterization', shadow_buffer)
-    cv2.waitKey()
 
     # texture mapping
     t0 = time()
@@ -414,8 +430,8 @@ def scene1():
     scene.light.rotate_y(100)
     scene.light.rotate_x(35)
 
-    image_width = 320
-    image_height = 240
+    image_width = 640
+    image_height = 480
 
     scene.camera = Camera(0.98, 0.735, image_width, image_height, 1, 10000, 20, np.eye(4))
     scene.camera.translate_y(60)
@@ -444,8 +460,8 @@ def scene2():
     scene.light.rotate_y(100)
     scene.light.rotate_x(35)
 
-    image_width = 320
-    image_height = 240
+    image_width = 640
+    image_height = 480
 
     scene.camera = Camera(0.98, 0.735, image_width, image_height, 1, 10000, 20, np.eye(4))
     scene.camera.translate_y(60)

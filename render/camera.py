@@ -90,12 +90,17 @@ class Camera(CameraBase):
         else:
             self.plane_width *= self.image_ratio / self.film_ratio
 
+    @property
+    def scale(self):
+        return np.array([self.near_clip/self.plane_width*self.image_width,
+                         self.near_clip/self.plane_height*self.image_height, -1.0])
+
+    @property
+    def offset(self):
+        return np.array([0.5*self.image_width, 0.5*self.image_height, 0.0])
+
     def project(self, point):
-        point = point.squeeze()
-        scale = np.array([self.near_clip/self.plane_width*self.image_width/-point[2],
-                          self.near_clip/self.plane_height*self.image_height/point[2], -1.0])
-        offset = np.array([0.5*self.image_width, 0.5*self.image_height, 0.0])
-        return point[:3] * scale + offset
+        return point.squeeze()[:3] * self.scale / np.array([-point[2], point[2], 1]) + self.offset
 
 
 if __name__ == '__main__':
