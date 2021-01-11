@@ -35,8 +35,8 @@ class Transformable:
         s = np.sin(degree * np.pi / 180)
         self.transform = self.transform @ np.array([
             [1.0, 0.0, 0.0, 0.0],
-            [0.0, c, -s, 0.0],
-            [0.0, s, c, 0.0],
+            [0.0,   c,  -s, 0.0],
+            [0.0,   s,   c, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ])
 
@@ -44,9 +44,9 @@ class Transformable:
         c = np.cos(degree * np.pi / 180)
         s = np.sin(degree * np.pi / 180)
         self.transform = self.transform @ np.array([
-            [c, 0.0, s, 0.0],
+            [  c, 0.0,   s, 0.0],
             [0.0, 1.0, 0.0, 0.0],
-            [-s, 0.0, c, 0.0],
+            [ -s, 0.0,   c, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ])
 
@@ -54,8 +54,8 @@ class Transformable:
         c = np.cos(degree * np.pi / 180)
         s = np.sin(degree * np.pi / 180)
         self.transform = self.transform @ np.array([
-            [c, -s, 0.0, 0.0],
-            [s, c, 0.0, 0.0],
+            [  c,  -s, 0.0, 0.0],
+            [  s,   c, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ])

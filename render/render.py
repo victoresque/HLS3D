@@ -98,7 +98,7 @@ def geometric_transform(scene):
                 cn2 = (world_to_camera[:3, :3] @ obj.transform[:3, :3] @ n2).squeeze()
 
                 # lv: (vertex light coordinate)
-                #       = (world to light) x (object transform) x (vertex object coordinate) x (vertex object coordinate)
+                #       = (world to light) x (object transform) x (vertex object coordinate)
                 lv0 = (world_to_light @ obj.transform @ v0).squeeze()[:3]
                 lv1 = (world_to_light @ obj.transform @ v1).squeeze()[:3]
                 lv2 = (world_to_light @ obj.transform @ v2).squeeze()[:3]
@@ -238,8 +238,8 @@ def rasterization(scene, depth_buffer, raster_buffer):
                             fz = 1 / fz_1
 
                             if fz < depth_buffer[fy, fx]:
-                                tex = w0*t0 + w1*t1 + w2*t2
-                                lum = w0*l0 + w1*l1 + w2*l2
+                                tex = (w0*t0*fz0_1 + w1*t1*fz1_1 + w2*t2*fz2_1) * fz
+                                lum = (w0*l0*fz0_1 + w1*l1*fz1_1 + w2*l2*fz2_1) * fz
                                 raster_buffer[0, fy, fx] = obj_id
                                 raster_buffer[1, fy, fx] = tex[0]
                                 raster_buffer[2, fy, fx] = tex[1]
@@ -264,10 +264,16 @@ def shadow_raster(scene, shadow_buffer, depth_buffer, shadow_map):
             vertices = mesh['cam_vertices']
             step, ti0, ti1, ni0, ni1, vi0, vi1 = 8, 0, 2, 2, 5, 5, 8
 
+            light_vertices = mesh['light_vertices']
+
             for i in range(0, len(vertices), step*3):
                 cv0 = np.array([[*vertices[i+0*step+vi0:i+0*step+vi1], 1]]).T
                 cv1 = np.array([[*vertices[i+1*step+vi0:i+1*step+vi1], 1]]).T
                 cv2 = np.array([[*vertices[i+2*step+vi0:i+2*step+vi1], 1]]).T
+
+                # lv0 = light_vertices[]
+                # lv1 =
+                # lv2 =
 
                 cnorm = vertices[i+0*step+ni0:i+0*step+ni1]
 
@@ -400,7 +406,7 @@ def scene1():
     scene.objects += [obj]
 
     scene.light = Light()
-    scene.light.shadow_map_dim = 128
+    scene.light.shadow_map_dim = 256
     scene.light.shadow_map_bias = 1
     scene.light.translate_z(1000)
     scene.light.translate_y(1500)
@@ -450,6 +456,6 @@ def scene2():
 
 
 if __name__ == '__main__':
-    scene = scene2()
+    scene = scene1()
 
     render(scene)
