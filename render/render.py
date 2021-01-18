@@ -62,7 +62,7 @@ def geometric_transform(scene):
                 v1[3, 0] = 1
                 v2[3, 0] = 1
 
-                if 'N3F' in mesh_format:
+                if False and 'N3F' in mesh_format:
                     # triangle vertex normal vectors
                     n0 = np.array([vertices[i+1*step-6:i+1*step-3]]).T
                     n1 = np.array([vertices[i+2*step-6:i+2*step-3]]).T
@@ -399,7 +399,8 @@ def render(scene):
     texture_mapping(scene, raster_buffer, frame_buffer)
     print('{:25s}:'.format('texture_mapping()'), time() - t0)
 
-    cv2.imshow('blend', frame_buffer * (shadow_buffer[:, :, np.newaxis]*0.5+0.5))  # TODO: ambient
+    # cv2.imshow('blend', frame_buffer * (shadow_buffer[:, :, np.newaxis]*0.5+0.5))  # TODO: ambient
+    cv2.imshow('blend', frame_buffer)  # TODO: ambient
     cv2.waitKey()
 
 
@@ -458,13 +459,13 @@ def scene2():
     scene.light.translate_y(1500)
     scene.light.translate_x(2000)
     scene.light.rotate_y(100)
-    scene.light.rotate_x(35)
+    scene.light.rotate_x(45)
 
     image_width = 640
     image_height = 480
 
     scene.camera = Camera(0.98, 0.735, image_width, image_height, 1, 10000, 20, np.eye(4))
-    scene.camera.translate_y(60)
+    scene.camera.translate_y(40)
     scene.camera.translate_z(60)
     scene.camera.rotate_x(35)
 

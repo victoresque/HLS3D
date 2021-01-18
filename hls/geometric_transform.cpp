@@ -5,14 +5,8 @@ void geometric_transform (
     stream_t* stream_output,
     int num_faces,
     float transform[3][4],
-    float scale
+    float obj_scale
 ) {
-    #pragma HLS INTERFACE axis register both port=stream_input
-    #pragma HLS INTERFACE axis register both port=stream_output
-    #pragma HLS INTERFACE s_axilite port=transform
-    #pragma HLS INTERFACE s_axilite port=scale
-    #pragma HLS INTERFACE s_axilite port=return
-
     value_t stream_data;
     stream_data.data = 0;
     stream_data.keep = 0xFF;
@@ -42,7 +36,7 @@ void geometric_transform (
     }
 
     for (int i = 0; i < num_faces; i++) {
-        #pragma HLS pipeline
+        #pragma HLS pipeline II=12
         apuint64_1_to_half_2(stream_input->read().data, t0[0], t0[1]);
         apuint64_1_to_half_2(stream_input->read().data, n0[0], n0[1]);
         apuint64_1_to_half_2(stream_input->read().data, n0[2], v0[0]);
@@ -58,9 +52,9 @@ void geometric_transform (
         apuint64_1_to_half_2(stream_input->read().data, n2[2], v2[0]);
         apuint64_1_to_half_2(stream_input->read().data, v2[1], v2[2]);
 
-        matrix_mul_vector(0, transform_h, scale, v0, cv0);
-        matrix_mul_vector(0, transform_h, scale, v1, cv1);
-        matrix_mul_vector(0, transform_h, scale, v2, cv2);
+        matrix_mul_vector(0, transform_h, obj_scale, v0, cv0);
+        matrix_mul_vector(0, transform_h, obj_scale, v1, cv1);
+        matrix_mul_vector(0, transform_h, obj_scale, v2, cv2);
 
         matrix_mul_vector(1, transform_h, 1.0, n0, cn0);
         matrix_mul_vector(1, transform_h, 1.0, n1, cn1);

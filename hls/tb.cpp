@@ -21,6 +21,14 @@ int main(int argc, char *argv[])
     stream_t stream_output;
 
     int num_faces = 1520;
+
+    float transform[3][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0, 0.0},
+        {0.0, 0.0, 1.0, 0.0}
+    };
+    float obj_scale = 1.0;
+
     float lnorm[3] = {0.81, 0.55, 0.21};
     float cam_scale[3] = {514.22, 514.22, -1.0};
     float cam_offset[3] = {320.0, 240.0, 0.0};
@@ -28,19 +36,6 @@ int main(int argc, char *argv[])
 
     uint8_t result[480][640][3];
     uint8_t _;
-
-    // rasterization (
-    //     stream_t* stream_input,
-    //     stream_t* stream_output,
-    //     int mode,  // 0: reset, 1: texture, 2: mesh in, 3: frame out
-    //     int object_id,
-    //     int texture_id,
-    //     int num_faces,
-    //     float lnorm[3],
-    //     float cam_scale[3],
-    //     float cam_offset[3],
-    //     int fh[2]  // frame height range
-    // )
 
     // rasterization
     ofstream outfile;
@@ -65,14 +60,14 @@ int main(int argc, char *argv[])
             }
         }
 
-        rasterization(&stream_input, &stream_output, 0, 0, 0,
-                  num_faces, lnorm, cam_scale, cam_offset, fh);
+        render(&stream_input, &stream_output, 0, num_faces,
+               transform, obj_scale, 0, lnorm, cam_scale, cam_offset, fh);
 
-        rasterization(&stream_input, &stream_output, 2, 0, 0,
-                      num_faces, lnorm, cam_scale, cam_offset, fh);
+        render(&stream_input, &stream_output, 2, num_faces,
+               transform, obj_scale, 0, lnorm, cam_scale, cam_offset, fh);
 
-        rasterization(&stream_input, &stream_output, 3, 0, 0,
-                      num_faces, lnorm, cam_scale, cam_offset, fh);
+        render(&stream_input, &stream_output, 3, num_faces,
+               transform, obj_scale, 0, lnorm, cam_scale, cam_offset, fh);
 
         for (int j = fh[0]; j < fh[1]; j++) {
             for (int k = 0; k < 640; k+=2) {

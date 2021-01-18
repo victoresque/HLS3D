@@ -34,12 +34,26 @@ half hmin (half a, half b);
 int imax (int a, int b);
 int imin (int a, int b);
 
+void render (
+    stream_t* stream_input,
+    stream_t* stream_output,
+    int mode,
+    int num_faces,
+    float transform[3][4],
+    float obj_scale,
+    int texture_id,
+    float lnorm[3],
+    float cam_scale[3],
+    float cam_offset[3],
+    int frameh[2]
+);
+
 void geometric_transform (
     stream_t* stream_input,
     stream_t* stream_output,
     int num_faces,
     float transform[3][4],
-    float scale
+    float obj_scale
 );
 
 #define BUF_H 60
@@ -47,7 +61,6 @@ void rasterization (
     stream_t* stream_input,
     stream_t* stream_output,
     int mode,  // 0: reset, 1: texture, 2: mesh in, 3: frame out
-    int object_id,
     int texture_id,
     int num_faces,
     float lnorm[3],
