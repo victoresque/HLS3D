@@ -26,7 +26,13 @@ void render (
     #pragma HLS INTERFACE s_axilite port=frameh
     #pragma HLS INTERFACE s_axilite port=return
 
-    if (mode == 4) {
+    if (mode == 5) {
+        for (int i = 0; i < 640*480/2; i++) {
+            #pragma HLS pipeline
+            stream_output->write(stream_input->read());
+        }
+    }
+    else if (mode == 4) {
         geometric_transform(stream_input, stream_output,
                             num_faces, transform, obj_scale);
     }

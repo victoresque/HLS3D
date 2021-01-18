@@ -122,8 +122,8 @@ def geometric_transform(scene):
                 #     mesh['cam_vertices'].extend([*t0, *cn0, *cv0, *t1, *cn1, *cv1, *t2, *cn2, *cv2])
                 mesh['cam_vertices'].extend([*t0, *cn0, *cv0, *t1, *cn1, *cv1, *t2, *cn2, *cv2])
 
-            mesh['cam_vertices'] = np.array(mesh['cam_vertices'])
-            mesh['light_vertices'] = np.array(mesh['light_vertices'])
+        mesh['cam_vertices'] = np.array(mesh['cam_vertices'])
+        mesh['light_vertices'] = np.array(mesh['light_vertices'])
 
     # expand shadow map range by 10%
     sscale = scene.light.shadow_map_dim / (max(sxmax-sxmin, symax-symin) * 1.2)
@@ -422,8 +422,17 @@ def scene1():
     obj.translate_z(-50)
     scene.objects += [obj]
 
+    obj = GameObject('2')
+    obj.load_mesh('../data/camero.obj')
+    obj.load_texture('../data/camero.png', 64)
+    obj.set_scale(10)
+    obj.translate_x(-20)
+    obj.translate_z(8)
+    obj.rotate_y(-45)
+    scene.objects += [obj]
+
     scene.light = Light()
-    scene.light.shadow_map_dim = 256
+    scene.light.shadow_map_dim = 64
     scene.light.shadow_map_bias = 1
     scene.light.translate_z(1000)
     scene.light.translate_y(1500)
@@ -431,13 +440,15 @@ def scene1():
     scene.light.rotate_y(100)
     scene.light.rotate_x(35)
 
-    image_width = 640
-    image_height = 480
+    image_width = 320
+    image_height = 240
 
     scene.camera = Camera(0.98, 0.735, image_width, image_height, 1, 10000, 20, np.eye(4))
     scene.camera.translate_y(60)
     scene.camera.translate_z(60)
     scene.camera.rotate_x(35)
+
+    print(scene.camera.world_to_camera)
 
     return scene
 

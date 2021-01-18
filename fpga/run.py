@@ -124,6 +124,103 @@ def vrfb_init(ipVRFB):
 def float_to_bytes(x):
     return struct.pack('f', x)
 
+
+def render_wait_done(ip):
+    while True:
+        if (ip.read(0x0000) & 0x4) != 0x0:
+            break
+
+
+def render_prepare_camera(ip):
+    ip.write(0x00A0, float_to_bytes(514.22))
+    ip.write(0x00A4, float_to_bytes(514.22))
+    ip.write(0x00A8, float_to_bytes(-1.0))
+    ip.write(0x00B0, float_to_bytes(320.0))
+    ip.write(0x00B4, float_to_bytes(240.0))
+    ip.write(0x00B8, float_to_bytes(0.0))
+
+
+def render_set_light(ip, light):
+    light = np.array(light)
+    ip.write(0x0090, float_to_bytes(light[0]))
+    ip.write(0x0094, float_to_bytes(light[1]))
+    ip.write(0x0098, float_to_bytes(light[2]))
+
+
+def render_set_transform(ip, transform):
+    transform = np.array(transform)
+    ip.write(0x0040, float_to_bytes(transform[0, 0]))
+    ip.write(0x0044, float_to_bytes(transform[0, 1]))
+    ip.write(0x0048, float_to_bytes(transform[0, 2]))
+    ip.write(0x004C, float_to_bytes(transform[0, 3]))
+    ip.write(0x0050, float_to_bytes(transform[1, 0]))
+    ip.write(0x0054, float_to_bytes(transform[1, 1]))
+    ip.write(0x0058, float_to_bytes(transform[1, 2]))
+    ip.write(0x005C, float_to_bytes(transform[1, 3]))
+    ip.write(0x0060, float_to_bytes(transform[2, 0]))
+    ip.write(0x0064, float_to_bytes(transform[2, 1]))
+    ip.write(0x0068, float_to_bytes(transform[2, 2]))
+    ip.write(0x006C, float_to_bytes(transform[2, 3]))
+
+
+def render_set_num_faces(ip, num_faces):
+    ip.write(0x0018, num_faces)
+
+
+def render_set_obj_scale(ip, scale):
+    ip.write(0x0080, float_to_bytes(scale))
+
+
+def render_set_texture_id(ip, texture_id):
+    ip.write(0x0088, texture_id)
+
+
+def render_transform(ipRender, ipIDMA, ipODMA, input_buffer, input_buffer1):
+    ipRender.write(0x0010, 4)
+    ipRender.write(0x0000, 1)
+
+    ipIDMA.sendchannel.transfer(input_buffer)
+    ipODMA.recvchannel.transfer(input_buffer1)
+    ipIDMA.sendchannel.wait()
+    ipODMA.recvchannel.wait()
+
+    render_wait_done(ipRender)
+
+
+def render_frame(ipRender, ipIDMA, ipODMA, mesh_buffers, transforms, texture_ids, output_buffer):
+    mbuf_trans = []
+    for i, mbuf in enumerate(mesh_buffers):
+        num_faces = len(mbuf) // 24
+        render_set_num_faces(ipRender, num_faces)
+        mbuf_trans.append(allocate(shape=len(mbuf), dtype=np.float32))
+        render_set_transform(ipRender, transforms[i])
+        render_transform(ipRender, ipIDMA, ipODMA, mbuf, mbuf_trans[-1])
+
+    for i in range(8):
+        fh0 = 60 * i
+        fh1 = 60 * (i + 1)
+        ipRender.write(0x00C0, fh0)
+        ipRender.write(0x00C4, fh1)
+        ipRender.write(0x0010, 0)
+        ipRender.write(0x0000, 1)
+        render_wait_done(ipRender)
+
+        for j, mbuf in enumerate(mbuf_trans):
+            num_faces = len(mbuf) // 24
+            render_set_num_faces(ipRender, num_faces)
+            ipRender.write(0x0010, 2)
+            ipRender.write(0x0000, 1)
+            ipIDMA.sendchannel.transfer(mbuf)
+            ipIDMA.sendchannel.wait()
+            render_wait_done(ipRender)
+
+        ipRender.write(0x0010, 3)
+        ipRender.write(0x0000, 1)
+        ipODMA.recvchannel.transfer(output_buffer[fh0*640:fh1*640])
+        ipODMA.recvchannel.wait()
+        render_wait_done(ipRender)
+
+
 if __name__ == "__main__":
     print("Start of \"" + sys.argv[0] + "\"")
 
@@ -142,140 +239,76 @@ if __name__ == "__main__":
     ipIDMA = ol.axi_dma_0
     ipODMA = ol.axi_dma_1
 
-    scene = []
-    with open('./scene.txt') as f:
-        for line in f:
-            scene.append(float(line))
-    scene = np.array(scene)
-    print(len(scene))
-
     ipRender = ol.render_0
-    ipRender.write(0x0018, 1520)
-    ipRender.write(0x0080, float_to_bytes(1.0))
-    ipRender.write(0x0088, 0)
 
-    ipRender.write(0x0040, float_to_bytes(1.0))
-    ipRender.write(0x0044, float_to_bytes(0.0))
-    ipRender.write(0x0048, float_to_bytes(0.0))
-    ipRender.write(0x004C, float_to_bytes(0.0))
-    ipRender.write(0x0050, float_to_bytes(0.0))
-    ipRender.write(0x0054, float_to_bytes(1.0))
-    ipRender.write(0x0058, float_to_bytes(0.0))
-    ipRender.write(0x005C, float_to_bytes(0.0))
-    ipRender.write(0x0060, float_to_bytes(0.0))
-    ipRender.write(0x0064, float_to_bytes(0.0))
-    ipRender.write(0x0068, float_to_bytes(1.0))
-    ipRender.write(0x006C, float_to_bytes(0.0))
+    render_set_obj_scale(ipRender, 1.0)
+    render_set_texture_id(ipRender, 0)
 
-    ipRender.write(0x0090, float_to_bytes(0.81))
-    ipRender.write(0x0094, float_to_bytes(0.55))
-    ipRender.write(0x0098, float_to_bytes(0.21))
+    render_prepare_camera(ipRender)
+    render_set_light(ipRender, [0.81, 0.55, 0.21])
 
-    ipRender.write(0x00A0, float_to_bytes(514.22))
-    ipRender.write(0x00A4, float_to_bytes(514.22))
-    ipRender.write(0x00A8, float_to_bytes(-1.0))
-
-    ipRender.write(0x00B0, float_to_bytes(320.0))
-    ipRender.write(0x00B4, float_to_bytes(240.0))
-    ipRender.write(0x00B8, float_to_bytes(0.0))
-
-    input_buffer = allocate(shape=(1520*24,), dtype=np.float32)
     output_buffer = allocate(shape=(480*640,), dtype=np.uint32)
+    frame_buffer = allocate(shape=(480*640,), dtype=np.uint32)
 
-    input_buffer[:] = scene
+    meshes = [np.load('01_mesh.npy'),
+              np.load('02_mesh.npy'),
+              np.load('03_mesh.npy')]
+    mesh_buffers = [allocate(shape=len(m), dtype=np.float32) for m in meshes]
+    for i, mbuf in enumerate(mesh_buffers):
+        mbuf[:] = meshes[i]
 
-    t0 = time()
-    for i in range(8):
-        fh0 = 60 * i
-        fh1 = 60 * (i + 1)
-        ipRender.write(0x00C0, fh0)
-        ipRender.write(0x00C4, fh1)
-
-        ipRender.write(0x0010, 0)
-        ipRender.write(0x0000, 1)
-
-        while True:
-            if (ipRender.read(0x0000) & 0x4) != 0x0:
-                break
-
-        ipRender.write(0x0010, 2)
-        ipRender.write(0x0000, 1)
-
-        ipIDMA.sendchannel.transfer(input_buffer)
-        ipIDMA.sendchannel.wait()
-
-        while True:
-            if (ipRender.read(0x0000) & 0x4) != 0x0:
-                break
-
-        ipRender.write(0x0010, 3)
-        ipRender.write(0x0000, 1)
-
-        ipODMA.recvchannel.transfer(output_buffer[fh0*640:fh1*640])
-        ipODMA.recvchannel.wait()
-
-        while True:
-            if (ipRender.read(0x0000) & 0x4) != 0x0:
-                break
-    print('time:', time() - t0)
-
-    output_buffer = np.reshape(output_buffer, (480, 640))
-
-    image = np.zeros((480, 640, 3)).astype(np.uint8)
-    image[:, :, 0] = output_buffer % 256
-    image[:, :, 1] = (output_buffer // 256) % 256
-    image[:, :, 2] = (output_buffer // 256 // 256) % 256
-
-    cv2.imwrite('test.jpg', image)
+    obj_trns = [np.load('01_trns.npy'),
+                np.load('02_trns.npy'),
+                np.load('03_trns.npy')]
+    transforms = [0, 0, 0]
+    texture_ids = [0, 0, 0]
 
     ipVTPG.write(0x0000, 0x81)
-
-    ipVRFB.write(0x0030, output_buffer.device_address)
     ipVRFB.write(0x0000, 0x81)
-
+    ipVRFB.write(0x0030, frame_buffer.device_address)
     ipHDMI.write(0x0048, 0x1)
     ipHDMI.write(0x0040, 0x1)
 
-    input()
+    world_to_camera = np.array(
+        [[1., 0.,    0.,     0.  ],
+         [0., 0.82, -0.57, -14.73],
+         [0., 0.57,  0.82, -83.56],
+         [0., 0.,    0.,     1.  ]])
+
+    for n in range(2):
+        for i in range(100):
+            t0 = time()
+            output_buffer = allocate(shape=(480*640,), dtype=np.uint32)
+
+            c = np.cos(i*4/100*np.pi)
+            s = np.sin(i*4/100*np.pi)
+            R = np.array([
+                [  c, 0.0,   s, 0.0],
+                [0.0, 1.0, 0.0, 0.0],
+                [ -s, 0.0,   c, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ])
+
+            if (0<=i<25) or (50<=i<75):
+                obj_trns[0][1, 3] += 0.2
+                obj_trns[2][1, 3] += 0.6
+            else:
+                obj_trns[0][1, 3] -= 0.2
+                obj_trns[2][1, 3] -= 0.6
+
+            if n % 2:
+                render_set_light(ipRender, [np.cos(-10+i*0.2), 0, np.sin(10-i*0.2)])
+            else:
+                render_set_light(ipRender, [np.cos(10-i*0.2), 0, np.sin(-10+i*0.2)])
+
+            transforms[0] = (world_to_camera @ obj_trns[0] @ R)[:3, :]
+            transforms[1] = (world_to_camera @ obj_trns[1])[:3, :]
+            transforms[2] = (world_to_camera @ obj_trns[2] @ R)[:3, :]
+
+            render_frame(ipRender, ipIDMA, ipODMA, mesh_buffers, transforms, texture_ids, output_buffer)
+            frame_buffer[:] = output_buffer
+
+            print('fps:', int(np.round(1/(time()-t0))))
 
     ipVTPG.write(0x0000, 0x00)
     ipVRFB.write(0x0000, 0x00)
-
-    # AXILiteS
-    # 0x00 : Control signals
-    #        bit 0  - ap_start (Read/Write/COH)
-    #        bit 1  - ap_done (Read/COR)
-    #        bit 2  - ap_idle (Read)
-    #        bit 3  - ap_ready (Read)
-    #        bit 7  - auto_restart (Read/Write)
-    #        others - reserved
-    # 0x10 : Data signal of mode
-    #        bit 31~0 - mode[31:0] (Read/Write)
-    # 0x14 : reserved
-    # 0x18 : Data signal of num_faces
-    #        bit 31~0 - num_faces[31:0] (Read/Write)
-    # 0x1c : reserved
-    # 0x80 : Data signal of obj_scale
-    #        bit 31~0 - obj_scale[31:0] (Read/Write)
-    # 0x84 : reserved
-    # 0x88 : Data signal of texture_id
-    #        bit 31~0 - texture_id[31:0] (Read/Write)
-    # 0x8c : reserved
-    # 0x40 ~
-    # 0x7f : Memory 'transform' (12 * 32b)
-    #        Word n : bit [31:0] - transform[n]
-    # 0x90 ~
-    # 0x9f : Memory 'lnorm' (3 * 32b)
-    #        Word n : bit [31:0] - lnorm[n]
-    # 0xa0 ~
-    # 0xaf : Memory 'cam_scale' (3 * 32b)
-    #        Word n : bit [31:0] - cam_scale[n]
-    # 0xb0 ~
-    # 0xbf : Memory 'cam_offset' (3 * 32b)
-    #        Word n : bit [31:0] - cam_offset[n]
-    # 0xc0 ~
-    # 0xc7 : Memory 'frameh' (2 * 32b)
-    #        Word n : bit [31:0] - frameh[n]
-    # (SC = Self Clear, COR = Clear on Read, TOW = Toggle on Write, COH = Clear on Handshake)
-
-
