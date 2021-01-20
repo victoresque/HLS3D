@@ -131,6 +131,12 @@ def render_wait_done(ip):
             break
 
 
+def render_reset_buffer(ip):
+    ip.write(0x0010, 0)
+    ip.write(0x0000, 1)
+    render_wait_done(ip)
+
+
 def render_prepare_camera(ip):
     ip.write(0x00A0, float_to_bytes(514.22))
     ip.write(0x00A4, float_to_bytes(514.22))
@@ -187,6 +193,17 @@ def render_transform(ipRender, ipIDMA, ipODMA, input_buffer, input_buffer1):
     render_wait_done(ipRender)
 
 
+def render_load_texture(ipRender, ipIDMA, txtr_buffers, texture_ids):
+    for i, tid in enumerate(texture_ids):
+        if tid != 0:
+            render_set_texture_id(ipRender, tid)
+            ipRender.write(0x0010, 1)
+            ipRender.write(0x0000, 1)
+            ipIDMA.sendchannel.transfer(txtr_buffers[2])
+            ipIDMA.sendchannel.wait()
+            render_wait_done(ipRender)
+
+
 def render_frame(ipRender, ipIDMA, ipODMA, mesh_buffers, transforms, texture_ids, output_buffer):
     mbuf_trans = []
     for i, mbuf in enumerate(mesh_buffers):
@@ -201,13 +218,12 @@ def render_frame(ipRender, ipIDMA, ipODMA, mesh_buffers, transforms, texture_ids
         fh1 = 60 * (i + 1)
         ipRender.write(0x00C0, fh0)
         ipRender.write(0x00C4, fh1)
-        ipRender.write(0x0010, 0)
-        ipRender.write(0x0000, 1)
-        render_wait_done(ipRender)
+        render_reset_buffer(ipRender)
 
         for j, mbuf in enumerate(mbuf_trans):
             num_faces = len(mbuf) // 24
             render_set_num_faces(ipRender, num_faces)
+            render_set_texture_id(ipRender, texture_ids[j])
             ipRender.write(0x0010, 2)
             ipRender.write(0x0000, 1)
             ipIDMA.sendchannel.transfer(mbuf)
@@ -229,6 +245,7 @@ if __name__ == "__main__":
     ipVTPG = ol.v_tpg_0
     ipHDMI = ol.axi_hdmi_tx_0
     ipVRFB = ol.v_frmbuf_rd_0
+    pynq.ps.Clocks.fclk0_mhz = 250
     pynq.ps.Clocks.fclk1_mhz = 38.5
 
     hdmi_iic_init(ipIIC)
@@ -242,13 +259,10 @@ if __name__ == "__main__":
     ipRender = ol.render_0
 
     render_set_obj_scale(ipRender, 1.0)
-    render_set_texture_id(ipRender, 0)
-
     render_prepare_camera(ipRender)
     render_set_light(ipRender, [0.81, 0.55, 0.21])
 
     output_buffer = allocate(shape=(480*640,), dtype=np.uint32)
-    frame_buffer = allocate(shape=(480*640,), dtype=np.uint32)
 
     meshes = [np.load('01_mesh.npy'),
               np.load('02_mesh.npy'),
@@ -260,12 +274,27 @@ if __name__ == "__main__":
     obj_trns = [np.load('01_trns.npy'),
                 np.load('02_trns.npy'),
                 np.load('03_trns.npy')]
+    obj_txtr = [None,
+                None,
+                np.load('03_txtr.npy')]
+    txtr_buffers = []
+    for txtr in obj_txtr:
+        if txtr is not None:
+            txtr_buffers.append(allocate(shape=len(txtr), dtype=np.uint32))
+            txtr_buffers[-1][:] = txtr
+            txtr_buffers[-1].flush()
+        else:
+            txtr_buffers.append(None)
+
     transforms = [0, 0, 0]
-    texture_ids = [0, 0, 0]
+    texture_ids = [0, 0, 1]
+
+    render_reset_buffer(ipRender)
+    render_load_texture(ipRender, ipIDMA, txtr_buffers, texture_ids)
 
     ipVTPG.write(0x0000, 0x81)
     ipVRFB.write(0x0000, 0x81)
-    ipVRFB.write(0x0030, frame_buffer.device_address)
+    ipVRFB.write(0x0030, output_buffer.device_address)
     ipHDMI.write(0x0048, 0x1)
     ipHDMI.write(0x0040, 0x1)
 
@@ -278,14 +307,23 @@ if __name__ == "__main__":
     for n in range(2):
         for i in range(100):
             t0 = time()
-            output_buffer = allocate(shape=(480*640,), dtype=np.uint32)
+            # output_buffer = allocate(shape=(480*640,), dtype=np.uint32)
 
             c = np.cos(i*4/100*np.pi)
             s = np.sin(i*4/100*np.pi)
-            R = np.array([
+            R1 = np.array([
                 [  c, 0.0,   s, 0.0],
                 [0.0, 1.0, 0.0, 0.0],
                 [ -s, 0.0,   c, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ])
+
+            c = np.cos(i*8/100*np.pi)
+            s = np.sin(i*8/100*np.pi)
+            R2 = np.array([
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0,   c,  -s, 0.0],
+                [0.0,   s,   c, 0.0],
                 [0.0, 0.0, 0.0, 1.0],
             ])
 
@@ -301,13 +339,11 @@ if __name__ == "__main__":
             else:
                 render_set_light(ipRender, [np.cos(10-i*0.2), 0, np.sin(-10+i*0.2)])
 
-            transforms[0] = (world_to_camera @ obj_trns[0] @ R)[:3, :]
+            transforms[0] = (world_to_camera @ obj_trns[0] @ R1)[:3, :]
             transforms[1] = (world_to_camera @ obj_trns[1])[:3, :]
-            transforms[2] = (world_to_camera @ obj_trns[2] @ R)[:3, :]
+            transforms[2] = (world_to_camera @ obj_trns[2] @ R1)[:3, :]
 
             render_frame(ipRender, ipIDMA, ipODMA, mesh_buffers, transforms, texture_ids, output_buffer)
-            frame_buffer[:] = output_buffer
-
             print('fps:', int(np.round(1/(time()-t0))))
 
     ipVTPG.write(0x0000, 0x00)

@@ -27,7 +27,7 @@ def export_mesh(obj):
             v1 = np.array([[*vertices[i+2*step-3:i+2*step]]]).T * obj.scale
             v2 = np.array([[*vertices[i+3*step-3:i+3*step]]]).T * obj.scale
 
-            if False and 'N3F' in mesh_format:
+            if 'N3F' in mesh_format:
                 # triangle vertex normal vectors
                 n0 = np.array([vertices[i+1*step-6:i+1*step-3]]).T
                 n1 = np.array([vertices[i+2*step-6:i+2*step-3]]).T
@@ -57,9 +57,11 @@ def export_mesh(obj):
 
 
 def export_txtr(obj):
-    txtr_array = np.zeros((64, 64, 4)).astype(np.uint8)
-    texture = (obj.texture * 255).astype(np.uint8)
-    txtr_array[:, :, :3] = texture
+    txtr_array = np.zeros((64, 64)).astype(np.uint32)
+    texture = (obj.texture * 255).astype(np.uint32)
+    texture = np.transpose(texture, (1, 0, 2))
+    texture = texture[:, ::-1, :]
+    txtr_array = texture[:, :, 2] + texture[:, :, 0]*256 + texture[:, :, 1]*256*256
     return txtr_array.flatten()
 
 
